@@ -14,10 +14,9 @@ async function main() {
 
   const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
 
-  // Gmail search query (change as needed)
+  
   const queries = JSON.parse(queriesJSON);
 
-  // Search for matching emails
   for (const query of queries) {
     console.log(query);
     const res = await gmail.users.messages.list({
