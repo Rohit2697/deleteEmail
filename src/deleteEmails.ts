@@ -40,7 +40,7 @@ class DeleteGmail {
       const res = await gmail.users.messages.list({
         userId: 'me',
         q: query,
-        maxResults: 100,
+        maxResults: 500,
       });
 
       const messages = res.data.messages || [];
