@@ -154,5 +154,4 @@ npx ts-node src/deleteEmails.ts
 
 ---
 
-## 📜 License  
-MIT License.  
+
