@@ -1,4 +1,4 @@
-import { google } from 'googleapis';
+import { google, gmail_v1 } from 'googleapis';
 import dotenv from 'dotenv';
 dotenv.config();
 const SCOPES = ['https://mail.google.com/'];
@@ -37,26 +37,44 @@ class DeleteGmail {
 
     for (const query of queries) {
       console.log(query);
-      const res = await gmail.users.messages.list({
-        userId: 'me',
-        q: query,
-        maxResults: 500,
-      });
+      let allMessages: any[] = [];
+      let pageToken: string | null | undefined = undefined;
+      do {
+        const res: gmail_v1.Schema$ListMessagesResponse = (
+          await gmail.users.messages.list({
+            userId: 'me',
+            q: query,
+            maxResults: 500,
+            pageToken,
+          })
+        ).data;
+        const messages = res.messages || [];
+        allMessages = allMessages.concat(messages);
+        pageToken = res.nextPageToken;
+      } while (pageToken);
 
-      const messages = res.data.messages || [];
-      if (messages.length === 0) {
+      if (allMessages.length === 0) {
         console.log('No matching emails found.');
         continue;
       }
 
       console.log(
-        `Query: ${query} Found ${messages.length} emails. Deleting...`
+        `Query: ${query} Found ${allMessages.length} emails. Deleting...`
       );
 
-      for (const msg of messages) {
-        if (msg.id) {
-          await gmail.users.messages.delete({ userId: 'me', id: msg.id });
-          console.log(`Deleted: ${msg.id}`);
+      const BATCH_LIMIT = 1000;
+      for (let i = 0; i < allMessages.length; i += BATCH_LIMIT) {
+        const batch = allMessages.slice(i, i + BATCH_LIMIT);
+        const ids = batch.map((msg) => msg.id!).filter(Boolean);
+
+        if (ids.length > 0) {
+          await gmail.users.messages.batchDelete({
+            userId: 'me',
+            requestBody: { ids },
+          });
+          console.log(
+            `email: ${this.gmail_email_id} Deleted ${ids.length} messages in batch.`
+          );
         }
       }
 
