@@ -1,30 +1,35 @@
 import { google, gmail_v1 } from 'googleapis';
 import dotenv from 'dotenv';
+import { checkAuth } from './auth';
 dotenv.config();
-const SCOPES = ['https://mail.google.com/'];
-interface GmailCred {
-  gmail_email_id: string;
-  gmail_client_id: string;
-  gmail_client_secret: string;
-  gmail_refresh_token: string;
-}
+
 class DeleteGmail {
   private clientId: string | undefined;
   private clientSecret: string | undefined;
   private refreshToken: string | undefined;
   private queriesJSON: string;
   private gmail_email_id: string;
-  constructor(gmail_cred: GmailCred) {
-    this.clientId = gmail_cred.gmail_client_id!;
-    this.clientSecret = gmail_cred.gmail_client_secret!;
-    this.refreshToken = gmail_cred.gmail_refresh_token!;
-    this.gmail_email_id = gmail_cred.gmail_email_id;
+  constructor(gmail_email_id: string) {
+    // this.clientId = gmail_cred.gmail_client_id!;
+    // this.clientSecret = gmail_cred.gmail_client_secret!;
+    // this.refreshToken = gmail_cred.gmail_refresh_token!;
+    this.gmail_email_id = gmail_email_id;
+
     this.queriesJSON = process.env.QUERIES || '';
   }
 
   async main() {
     console.log(`setting up gmail for: ${this.gmail_email_id}...`);
-
+    const tokenObj = await checkAuth(this.gmail_email_id);
+    if (!tokenObj) {
+      console.log(
+        `Can not perform the delete gmail operation for ${this.gmail_email_id}`
+      );
+      return;
+    }
+    this.clientId = tokenObj.gmail_client_id;
+    this.clientSecret = tokenObj.gmail_client_secret;
+    this.refreshToken = tokenObj.gmail_refresh_token;
     const oauth2Client = new google.auth.OAuth2(
       this.clientId,
       this.clientSecret
@@ -36,7 +41,6 @@ class DeleteGmail {
     const queries = JSON.parse(this.queriesJSON);
 
     for (const query of queries) {
-      console.log(query);
       let allMessages: any[] = [];
       let pageToken: string | null | undefined = undefined;
       do {
@@ -54,7 +58,7 @@ class DeleteGmail {
       } while (pageToken);
 
       if (allMessages.length === 0) {
-        console.log('No matching emails found.');
+        console.log(`Query: ${query} No matching emails found.`);
         continue;
       }
 
@@ -83,21 +87,18 @@ class DeleteGmail {
   }
 }
 
-const gmail_credsJSON = process.env.GMAIL_CREDENTIALS || '';
+const gmail_IdsJSON = process.env.GMAIL_IDS || '';
+const gmail_ids: string[] = JSON.parse(gmail_IdsJSON) || [];
+const deleteGamilOperation = async () => {
+  for (const gmail_id of gmail_ids) {
+    try {
+      const gmailClient = new DeleteGmail(gmail_id);
+      await gmailClient.main();
+    } catch (err) {
+      console.log(`Cleanup failed for ${gmail_id}`, err);
+    }
+  }
+  console.log(`Clean up operation done for all accounts.`);
+};
 
-const gmail_creds: GmailCred[] = JSON.parse(gmail_credsJSON) || [];
-const callingPromises = gmail_creds.map((gmail_cred) => {
-  const gmailClient = new DeleteGmail(gmail_cred);
-  return Promise.resolve()
-    .then(() => gmailClient.main()) // ensures sync throws become rejected promises
-    .catch((err) => {
-      console.error(
-        `Error processing account: ${gmail_cred.gmail_email_id}`,
-        err
-      );
-    });
-});
-
-Promise.all(callingPromises).then(() => {
-  console.log('All accounts processed');
-});
+deleteGamilOperation();
